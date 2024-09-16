@@ -1,4 +1,5 @@
 const DeliveryAddress = require('./model');
+const { policyFor, subject } = require('../../utils'); // Pastikan ini diimpor dengan benar
 
 // Store a new delivery address
 const store = async (req, res, next) => {
@@ -13,7 +14,7 @@ const store = async (req, res, next) => {
             return res.json({
                 error: 1,
                 message: err.message,
-                fields: err.fields
+                fields: err.errors
             });
         }
 
@@ -26,24 +27,28 @@ const update = async (req, res, next) => {
     try {
         let {_id, ...payload} = req.body;
         let {id} = req.params;
-        let address = await DeliveryAddress.findByid(id);
-        let subjectAddress = subject('DeliveryAddress', {...address, user_id: address.user});
+        let address = await DeliveryAddress.findById(id); // Perbaiki penulisan 'findByid'
+        if (!address) {
+            return res.status(404).json({ error: 1, message: 'Address not found' });
+        }
+
+        let subjectAddress = subject('DeliveryAddress', {...address.toObject(), user_id: address.user});
         let policy = policyFor(req.user);
         if (!policy.can('update', subjectAddress)) {
             return res.json({
                 error: 1,
-                message: `Tou're not allowed to modify this resource`
+                message: `You're not allowed to modify this resource`
             });
         }
 
-        address = await DeliveryAddress.findByIdAndUpdate(id, payload, {new: true});
-        ress.json(address);
+        address = await DeliveryAddress.findByIdAndUpdate(id, payload, { new: true });
+        return res.json(address); // Perbaiki 'ress.json' menjadi 'res.json'
     } catch (err) {
         if (err && err.name === 'ValidationError') {
             return res.json({
                 error: 1,
                 message: err.message,
-                fields: err.fields
+                fields: err.errors
             });
         }
 
@@ -56,18 +61,23 @@ const destroy = async (req, res, next) => {
     try {
         let {id} = req.params;
         let address = await DeliveryAddress.findById(id);
-        let subjectAddress = subject('DeliveryAddress', {...address, user_id: address.user});
-        let policy = PolicyFor(req.user);
-        if(!policy.can('delete', subjectAddress)){
+        if (!address) {
+            return res.status(404).json({ error: 1, message: 'Address not found' });
+        }
+
+        let subjectAddress = subject('DeliveryAddress', {...address.toObject(), user_id: address.user});
+        let policy = policyFor(req.user);
+        if (!policy.can('delete', subjectAddress)) {
             return res.json({
                 error: 1,
                 message: `You're not allowed to delete this resource.`
             });
         }
+
         address = await DeliveryAddress.findByIdAndDelete(id);
-        res.json(address);
+        return res.json(address);
     } catch (err) {
-        if(err && err.name == `ValidationError`){
+        if (err && err.name === 'ValidationError') {
             return res.json({
                 error: 1,
                 message: err.message,
@@ -80,22 +90,22 @@ const destroy = async (req, res, next) => {
 }
 
 const index = async (req, res) => {
-    try{
-        let {skip = 0, limit = 10 } = req.query;
-        let count = await DeliveryAddress.find({user: req.user._id}).countDocuments();
-        let address = await DeliveryAddress.find({user: req.user._id})
-        .skip(parseInt(skip))
-        .limit(parseInt(limit))
-        .sort(`-createdAt`);
+    try {
+        let { skip = 0, limit = 10 } = req.query;
+        let count = await DeliveryAddress.find({ user: req.user._id }).countDocuments();
+        let address = await DeliveryAddress.find({ user: req.user._id })
+            .skip(parseInt(skip))
+            .limit(parseInt(limit))
+            .sort('-createdAt');
 
-        return res.json({data: address, count});
-    } catch(err) {
-        if(err && err.name == `ValidationError`){
-            return res.json ({
+        return res.json({ data: address, count });
+    } catch (err) {
+        if (err && err.name === 'ValidationError') {
+            return res.json({
                 error: 1,
                 message: err.message,
                 fields: err.errors
-            })
+            });
         }
 
         next(err);
